@@ -8,7 +8,7 @@ Publishes commands to
     /dkcar/control/cmd_vel    
 """
 import math, time
-import rospy
+import rclpy
 from geometry_msgs.msg import Twist
 from geometry_msgs.msg import Point
 
@@ -26,11 +26,11 @@ class FollowLanes():
         self.blob_y         = 0.0
         self._time_detected = 0.0
         
-        self.sub_center = rospy.Subscriber("/blob/point_blob", Point, self.update_ball)
-        rospy.loginfo("Subscribers set")
+        self.sub_center = self.create_subscription("/blob/point_blob", Point, self.update_path,1)
+        self.get_logger().info("Subscribers set")
         
-        self.pub_twist = rospy.Publisher("/dkcar/control/cmd_vel", Twist, queue_size=5)
-        rospy.loginfo("Publisher set")
+        self.pub_twist = rospy.create_publisher("/dkcar/control/cmd_vel", Twist,5)
+        self.get_logger().info("Publisher set")
         
         self._message = Twist()
         
@@ -40,41 +40,39 @@ class FollowLanes():
     @property
     def is_detected(self): return(time.time() - self._time_detected < 1.0)
         
-    def update_ball(self, message):
+    def update_path(self, message):
         self.blob_x = message.x
         self.blob_y = message.y
         self._time_detected = time.time()
-        # rospy.loginfo("Ball detected: %.1f  %.1f "%(self.blob_x, self.blob_y))
+        # self.get_logger().info("Ball detected: %.1f  %.1f "%(self.blob_x, self.blob_y))
 
     def get_control_action(self):
         """
         Based on the current ranges, calculate the command
         
-        Steer will be added to the commanded throttle
-        throttle will be multiplied by the commanded throttle
         """
         steer_action    = 0.0
         throttle_action = 0.0
         
         if self.is_detected:
-            #--- Apply steering, proportional to how close is the object
+            #--- Apply steering, proportional to how close the object is
             steer_action   =-K_LAT_DIST_TO_STEER*self.blob_x
             steer_action   = saturate(steer_action, -1.5, 1.5)
-            rospy.loginfo("Steering command %.2f"%steer_action) 
-            throttle_action = 1.0 
+            self.get_logger().info("Steering command %.2f"%steer_action) 
+            throttle_action = 0.2 
             
         return (steer_action, throttle_action)
         
     def run(self):
         
         #--- Set the control rate
-        rate = rclpy.Rate(5)
+        rate = self.create_rate(5)
 
-        while not rospy.is_shutdown():
+        while rclpy.ok():
             #-- Get the control action
             steer_action, throttle_action    = self.get_control_action() 
             
-            rospy.loginfo("Steering = %3.1f"%(steer_action))
+            self.get_logger().info("Steering = %3.1f"%(steer_action))
             
             #-- update the message
             self._message.linear.x  = throttle_action
@@ -88,8 +86,12 @@ class FollowLanes():
 def main(args=None):
     rclpy.init(args=args)
     node = FollowLanes()
-    rclpy.spin(node)
+    # Spin in a separate thread
+    thread = threading.Thread(target=rclpy.spin, args=(node, ), daemon=True)
+    node.run()
+    
     rclpy.shutdown()
+    thread.join()
 
 
 if __name__ == "__main__":
