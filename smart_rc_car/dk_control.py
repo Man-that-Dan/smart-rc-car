@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python3
 """
 Gets the position of the blob and it commands to steer the wheels
 Subscribes to 
@@ -8,7 +8,9 @@ Publishes commands to
     /dkcar/control/cmd_vel    
 """
 import math, time
+import threading
 import rclpy
+from rclpy.node import Node
 from geometry_msgs.msg import Twist
 from geometry_msgs.msg import Point
 
@@ -19,17 +21,17 @@ def saturate(value, min, max):
     elif value >= max: return(max)
     else: return(value)
 
-class FollowLanes():
+class FollowLanes(Node):
     def __init__(self):
-        
+        super().__init__("follow_lanes") 
         self.blob_x         = 0.0
         self.blob_y         = 0.0
         self._time_detected = 0.0
         
-        self.sub_center = self.create_subscription("/blob/point_blob", Point, self.update_path,1)
+        self.sub_center = self.create_subscription(Point, "/blob/point_blob",  self.update_path,1)
         self.get_logger().info("Subscribers set")
         
-        self.pub_twist = rospy.create_publisher("/dkcar/control/cmd_vel", Twist,5)
+        self.pub_twist = self.create_publisher(Twist, "/dkcar/control/cmd_vel",5)
         self.get_logger().info("Publisher set")
         
         self._message = Twist()
@@ -44,6 +46,17 @@ class FollowLanes():
         self.blob_x = message.x
         self.blob_y = message.y
         self._time_detected = time.time()
+        #-- Get the control action
+        steer_action, throttle_action    = self.get_control_action() 
+            
+        self.get_logger().info("Steering = %3.1f"%(steer_action))
+            
+        #-- update the message
+        self._message.linear.x  = throttle_action
+        self._message.angular.z = steer_action
+            
+        #-- publish it
+        self.pub_twist.publish(self._message)
         # self.get_logger().info("Ball detected: %.1f  %.1f "%(self.blob_x, self.blob_y))
 
     def get_control_action(self):
@@ -81,17 +94,18 @@ class FollowLanes():
             #-- publish it
             self.pub_twist.publish(self._message)
 
-            rate.sleep()        
+                  
             
 def main(args=None):
     rclpy.init(args=args)
     node = FollowLanes()
     # Spin in a separate thread
-    thread = threading.Thread(target=rclpy.spin, args=(node, ), daemon=True)
-    node.run()
+    # thread = threading.Thread(target=rclpy.spin, args=(node, ), daemon=True)
+    # node.run()
+    rclpy.spin(node)
     
     rclpy.shutdown()
-    thread.join()
+    #thread.join()
 
 
 if __name__ == "__main__":

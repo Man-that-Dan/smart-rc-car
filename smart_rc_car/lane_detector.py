@@ -1,54 +1,18 @@
-#!/usr/bin/env python
-
-"""
-ON THE RASPI: ros2 run raspicam2 camerav2_320x240.launch enable_raw:=true
-   0------------------> x (cols) Image Frame
-   |
-   |        c    Camera frame
-   |         o---> x
-   |         |
-   |         V y
-   |
-   V y (rows)
-SUBSCRIBES TO:
-    /raspicam2_node/image: Source image topic
-    
-PUBLISHES TO:
-    /blob/image_blob : image with detected blob and search window
-    /blob/image_mask : masking    
-    /blob/point_blob : blob position in adimensional values wrt. camera frame
-"""
+#!/usr/bin/env python3
 
 
-#--- Allow relative importing
-if __name__ == '__main__' and __package__ is None:
-    from os import sys, path
-    sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
-    
 import sys
 import rclpy
 from rclpy.node import Node
 import cv2
 import time
-import numpy as np;
+import numpy as np
 
 from std_msgs.msg           import String
 from sensor_msgs.msg        import Image
 from geometry_msgs.msg      import Point
 from cv_bridge              import CvBridge, CvBridgeError
 
-
-"""
-Helper functions for detecting a blob based on a color range filter in HSV space
-   0------------------> x (cols)
-   |
-   |
-   |         o center
-   |
-   |
-   V y (rows)
-Original Author: Tiziano Fiorenzani
-"""
 
 #---------- Blob detecting function: returns keypoints and mask
 #-- return keypoints, reversemask
@@ -109,8 +73,8 @@ def blob_detect(image,                  #-- The frame (cv standard)
         params = cv2.SimpleBlobDetector_Params()
          
         # Change thresholds
-        params.minThreshold = 0;
-        params.maxThreshold = 100;
+        params.minThreshold = 0
+        params.maxThreshold = 100
          
         # Filter by Area.
         params.filterByArea = True
@@ -269,7 +233,7 @@ def get_blob_relative_position(image, keyPoint):
 class BlobDetector(Node):
 
     def __init__(self, thr_min, thr_max, blur=15, blob_params=None, detection_window=None):
-    
+        super().__init__("blob_detector") 
         self.set_threshold(thr_min, thr_max)
         self.set_blur(blur)
         self.set_blob_params(blob_params)
@@ -280,13 +244,13 @@ class BlobDetector(Node):
         self.blob_point = Point()
     
         self.get_logger().info(">> Publishing image to topic image_blob")
-        self.image_pub = self.create_publisher("/blob/image_blob",Image,1)
-        self.mask_pub = self.create_publisher("/blob/image_mask",Image,1)
+        self.image_pub = self.create_publisher(Image,"/blob/image_blob",1)
+        self.mask_pub = self.create_publisher(Image,"/blob/image_mask",1)
         self.get_logger().info(">> Publishing position to topic point_blob")
-        self.blob_pub  = self.create_publisher("/blob/point_blob",Point,1)
+        self.blob_pub  = self.create_publisher(Point,"/blob/point_blob",1)
 
         self.bridge = CvBridge()
-        self.image_sub = self.create_subscription("/raspicam2/image",Image,self.callback, 1)
+        self.image_sub = self.create_subscription(Image,"/camera/image",self.callback, 1)
         self.get_logger().info("<< Subscribed to topic /raspicam2/image")
         
     def set_threshold(self, thr_min, thr_max):
@@ -312,10 +276,13 @@ class BlobDetector(Node):
         
     def callback(self,data):
         #--- Assuming image is 320x240
+        cv_image = None
+        data.step = data.width * 3
+        self.get_logger().info(str(len(data.data)))
         try:
             cv_image = self.bridge.imgmsg_to_cv2(data, "bgr8")
         except CvBridgeError as e:
-            print(e)
+            self.get_logger().error(e)
 
         (rows,cols,channels) = cv_image.shape
         if cols > 60 and rows > 60 :
@@ -349,9 +316,9 @@ class BlobDetector(Node):
                 #--- Find x and y position in camera adimensional frame
                 x, y = get_blob_relative_position(cv_image, keyPoint)
                 
-                blobsX.push(x)
-                blobsY.push(y)
-                if i > 1:
+                blobsX.append(x)
+                blobsY.append(y)
+                if i > 0:
                     #find the point between the lanes to aim at
                     middlePointX = (blobsX[0] + blobsX[1]) / 2
                     middlePointY = (blobsY[0] + blobsY[1]) / 2
@@ -363,7 +330,8 @@ class BlobDetector(Node):
             fps = 1.0/(time.time()-self._t0)
             self._t0 = time.time()
             
-def main(args):
+def main(args=None):
+    rclpy.init(args=args)
     # blue_min = (77,40,0)
     # blue_max = (101, 255, 255) 
     # blue_min = (82,31,62)
@@ -404,14 +372,13 @@ def main(args):
     params.filterByInertia = True
     params.maxInertiaRatio = 0.5   
 
-    ic = BlobDetector(blue_min, blue_max, blur, params, detection_window)
-    rclpy.init(args=args)
-    node = BlobDetector()
+    node = BlobDetector(blue_min, blue_max, blur, params, detection_window)
+    
     rclpy.spin(node)
     cv2.destroyAllWindows()
     rclpy.shutdown()
     
 
 if __name__ == '__main__':
-    main(sys.argv)
+    main()
 
