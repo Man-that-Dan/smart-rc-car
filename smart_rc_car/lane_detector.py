@@ -296,7 +296,8 @@ class BlobDetector(Node):
             cv_image    = draw_frame(cv_image)
             
             cv_image    = draw_keypoints(cv_image, keypoints) 
-            
+            # cv2.imwrite('blob_image.jpeg', cv_image)
+            # cv2.imwrite('blob_mask.jpeg', mask)
             try:
                 self.image_pub.publish(self.bridge.cv2_to_imgmsg(cv_image, "bgr8"))
                 self.mask_pub.publish(self.bridge.cv2_to_imgmsg(mask, "8UC1"))
@@ -336,8 +337,8 @@ def main(args=None):
     # blue_max = (101, 255, 255) 
     # blue_min = (82,31,62)
     # blue_max = (106, 116, 193)     
-    blue_min = (55,40,0)
-    blue_max = (150, 255, 255)     
+    blue_min = (4,102,0)
+    blue_max = (24,255,144)     
     
     blur = 5
     
