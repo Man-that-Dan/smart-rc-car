@@ -72,7 +72,7 @@ class FollowLanes(Node):
             steer_action   =-K_LAT_DIST_TO_STEER*self.blob_x
             steer_action   = saturate(steer_action, -1.5, 1.5)
             self.get_logger().info("Steering command %.2f"%steer_action) 
-            throttle_action = 0.2 
+            throttle_action = 0.37 
             
         return (steer_action, throttle_action)
         

@@ -319,15 +319,24 @@ class BlobDetector(Node):
                 
                 blobsX.append(x)
                 blobsY.append(y)
-                if i > 0:
-                    #find the point between the lanes to aim at
-                    middlePointX = (blobsX[0] + blobsX[1]) / 2
-                    middlePointY = (blobsY[0] + blobsY[1]) / 2
-                    self.blob_point.x = middlePointX
-                    self.blob_point.y = middlePointY
-                    self.blob_pub.publish(self.blob_point) 
-                    break
                     
+                    
+            if len(blobsX) > 1:      
+                #find the point between the lanes to aim at
+                middlePointX = (blobsX[0] + blobsX[1]) / 2
+                middlePointY = (blobsY[0] + blobsY[1]) / 2
+                self.blob_point.x = middlePointX
+                self.blob_point.y = middlePointY
+                self.blob_pub.publish(self.blob_point)
+            elif len(blobsX) == 1:
+                if blobsX[0] < 0.0:
+                    self.blob_point.x = blobsX[0] + 0.5
+                else: 
+                    self.blob_point.x = blobsX[0] - 0.5
+                self.blob_point.y = blobsY[0]
+                self.blob_pub.publish(self.blob_point)
+         
+            
             fps = 1.0/(time.time()-self._t0)
             self._t0 = time.time()
             
